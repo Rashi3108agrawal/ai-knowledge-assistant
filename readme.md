@@ -1,5 +1,5 @@
 # Project Overview
-This project is an AI Knowledge Assistant designed to help users with various queries and support related to AI technologies.
+This project is an AI Knowledge Assistant designed to help users with various queries and support related to their interaction with some documents. It can help them summarize, answer question on the basis of document and take notes along with learning and interaction.  
 
 # Features
 - Natural Language Processing to understand user queries.
