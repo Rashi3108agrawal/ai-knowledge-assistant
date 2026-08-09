@@ -1,56 +1,50 @@
-# Project Overview
-This project is an AI Knowledge Assistant designed to help users with various queries and support related to their interaction with some documents. It can help them summarize, answer question on the basis of document and take notes along with learning and interaction.  
+# AI Knowledge Assistant
 
-# Features
-- Natural Language Processing to understand user queries.
-- Comprehensive response generation based on user input.
-- Easy integration with existing systems.
+A full-stack app that lets you upload PDF documents and ask natural-language questions about them, backed by a real retrieval-augmented generation (RAG) pipeline — not just a wrapper around a single OpenAI call.
 
-# Technology Stack
-- Python
-- Flask
-- TensorFlow
-- PostgreSQL
+🔗 **Live demo:** [add once deployed]
 
-# Setup Instructions
-1. Clone the repository: `git clone https://github.com/Rashi3108agrawal/ai-knowledge-assistant`
-2. Navigate to the project directory: `cd ai-knowledge-assistant`
-3. Install dependencies: `pip install -r requirements.txt`
-4. Set up the database and environment variables as required.
+## What it does
 
-# API Endpoints
-- `GET /api/v1/query` - Endpoint to handle user queries.
-- `POST /api/v1/feedback` - Endpoint for user feedback submission.
+- Upload a PDF — it's parsed, chunked, and summarized automatically
+- Ask questions about a document and get answers grounded in its actual content (RAG: retrieve relevant chunks by embedding similarity, then generate an answer from that context)
+- Semantic search across your documents using OpenAI embeddings + cosine similarity — finds conceptually related content, not just keyword matches
+- Basic keyword search as a secondary, simpler search mode
+- Notes and auth (JWT + bcrypt) to keep documents scoped per user
 
-# Project Structure
+## Tech stack
+
+- **Backend:** Node.js, Express
+- **Database:** MongoDB (Mongoose)
+- **AI:** OpenAI API — `gpt-4o-mini` for summarization/answers, `text-embedding-3-small` for retrieval
+- **Frontend:** React (Vite), React Router
+- **Auth:** JWT, bcrypt
+
+## How the RAG pipeline works
+
+1. On upload, the PDF is parsed and split into ~2000-character chunks
+2. Each chunk is embedded via OpenAI's embedding model and stored alongside its text
+3. When a question comes in, the question itself is embedded
+4. The chunks with the highest cosine similarity to the question's embedding are retrieved
+5. Those chunks are passed as context to the model to generate a grounded answer
+
+## Running locally
+
+```bash
+# Backend
+cd backend
+npm install
+cp .env.example .env   # add your MongoDB URI, JWT secret, and OpenAI API key
+npm run dev             # or: node index.js
+
+# Frontend (separate terminal)
+cd frontend
+npm install
+npm run dev
 ```
-/ai-knowledge-assistant
-├── app.py
-├── models
-│   ├── model.py
-├── templates
-│   ├── index.html
-├── static
-│   ├── styles.css
-└── requirements.txt
-```
 
-# Workflow
-1. User submits a query.
-2. The system processes the query.
-3. Generates a response and returns it to the user.
+## What I'd improve next
 
-# Contribution Guidelines
-1. Fork the repository.
-2. Create a new branch: `git checkout -b feature/YourFeature`
-3. Make your changes and commit: `git commit -m 'Add some feature'`
-4. Push to the branch: `git push origin feature/YourFeature`
-5. Open a Pull Request.
-
-# Troubleshooting
-- Ensure all dependencies are installed correctly.
-- Check the logs for any runtime errors.
-
-# Support Information
-For support, please open an issue in the repository or contact the maintainer. 
-
+- Batch re-embedding for existing documents if the embedding model changes
+- Chunk overlap (currently chunks are split with no overlap, which can cut answers off mid-context)
+- Vector index in MongoDB Atlas (or a dedicated vector DB) instead of in-memory cosine similarity, for scale beyond a handful of documents

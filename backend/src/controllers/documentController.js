@@ -2,6 +2,7 @@ const pdfParse = require("pdf-parse");
 const Document = require("../models/document");
 const { chunkText } = require("../utils/chunker");
 const { summarizeText } = require("../utils/ai");
+const { getEmbeddings } = require("../utils/embeddings");
 
 exports.getDocuments = async (req, res) => {
   try {
@@ -52,12 +53,28 @@ exports.uploadPDF = async (req, res) => {
       finalSummary = "AI summary temporarily unavailable. Please try again later.";
     }
 
-    // 4️⃣ Save to DB
+    // 4️⃣ Generate embeddings for each chunk — this is what makes search "semantic"
+    //    instead of keyword-based: each chunk gets a vector representing its meaning.
+    let chunksWithEmbeddings = [];
+    try {
+      const embeddings = await getEmbeddings(chunks);
+      chunksWithEmbeddings = chunks.map((text, i) => ({
+        text,
+        embedding: embeddings[i],
+      }));
+    } catch (err) {
+      console.error("Embedding generation failed:", err.message);
+      // Document still saves without embeddings; semantic search just won't
+      // find this doc until it's re-processed. Upload doesn't have to fail.
+    }
+
+    // 5️⃣ Save to DB
     const document = await Document.create({
       userId: req.userId,
       name: req.file.originalname,
       text: data.text,
       summary: finalSummary,
+      chunks: chunksWithEmbeddings,
     });
 
     res.status(201).json({
@@ -133,15 +150,19 @@ const { semanticSearch } = require("../utils/semanticSearch");
 exports.semanticSearchDocs = async (req, res) => {
   try {
     const { query } = req.body;
+    if (!query) {
+      return res.status(400).json({ message: "Query is required" });
+    }
 
     const documents = await Document.find({ userId: req.userId });
 
-    const results = semanticSearch(documents, query);
+    const results = await semanticSearch(documents, query);
 
     res.json(
-      results.map(r => ({
+      results.map((r) => ({
         documentId: r.document._id,
         name: r.document.name,
+        matchedText: r.chunkText,
         score: r.score,
       }))
     );
@@ -149,4 +170,3 @@ exports.semanticSearchDocs = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
-

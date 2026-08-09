@@ -1,23 +1,28 @@
-const natural = require("natural");
-const TfIdf = natural.TfIdf;
+const { getEmbedding, cosineSimilarity } = require("./embeddings");
 
-exports.semanticSearch = (documents, query) => {
-  const tfidf = new TfIdf();
+// Real semantic search: embeds the query, then compares it against every stored
+// chunk embedding using cosine similarity. Returns the best-matching chunks
+// across all of the user's documents, ranked by similarity score.
+//
+// This replaces the previous TF-IDF (keyword-frequency) implementation, which
+// matched on literal word overlap and wasn't actually "semantic" — it couldn't
+// tell that a query about "revenue" was related to a document about "income".
+async function semanticSearch(documents, query, topK = 5) {
+  const queryEmbedding = await getEmbedding(query);
 
-  documents.forEach(doc => {
-    tfidf.addDocument(doc.text);
-  });
+  const scored = [];
+  for (const doc of documents) {
+    for (const chunk of doc.chunks || []) {
+      const score = cosineSimilarity(queryEmbedding, chunk.embedding);
+      scored.push({
+        document: doc,
+        chunkText: chunk.text,
+        score,
+      });
+    }
+  }
 
-  let scores = [];
+  return scored.sort((a, b) => b.score - a.score).slice(0, topK);
+}
 
-  tfidf.tfidfs(query, (i, measure) => {
-    scores.push({
-      document: documents[i],
-      score: measure,
-    });
-  });
-
-  return scores
-    .filter(item => item.score > 0)
-    .sort((a, b) => b.score - a.score);
-};
+module.exports = { semanticSearch };

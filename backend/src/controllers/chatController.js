@@ -1,7 +1,7 @@
 const Document = require("../models/document");
 const Chat = require("../models/chat");
-const { chunkText } = require("../utils/chunker");
-const { summarizeText } = require("../utils/ai"); // optional AI
+const { summarizeText } = require("../utils/ai");
+const { getEmbedding, cosineSimilarity } = require("../utils/embeddings");
 
 exports.askQuestion = async (req, res) => {
   try {
@@ -20,27 +20,33 @@ exports.askQuestion = async (req, res) => {
       return res.status(404).json({ message: "Document not found" });
     }
 
-    // 🔍 Search relevant content
-    const chunks = chunkText(document.text, 500);
-   const keywords = question
-  .toLowerCase()
-  .replace(/[^a-z0-9 ]/g, "")
-  .split(" ")
-  .filter(word => word.length > 3);
+    // 🔍 Retrieval step: embed the question, then find the chunks whose
+    // embeddings are most similar to it. This is the "R" in RAG — instead of
+    // guessing relevance from literal keyword overlap, we compare meaning.
+    let context = "Answer not found in document.";
+    if (document.chunks && document.chunks.length > 0) {
+      const questionEmbedding = await getEmbedding(question);
 
-const relevantChunks = chunks.filter(chunk =>
-  keywords.some(word => chunk.toLowerCase().includes(word))
-);
+      const ranked = document.chunks
+        .map((chunk) => ({
+          text: chunk.text,
+          score: cosineSimilarity(questionEmbedding, chunk.embedding),
+        }))
+        .sort((a, b) => b.score - a.score);
 
+      const topChunks = ranked.slice(0, 3).map((c) => c.text);
+      if (topChunks.length > 0) {
+        context = topChunks.join("\n");
+      }
+    }
 
-    let answer =
-      relevantChunks.slice(0, 3).join("\n") ||
-      "Answer not found in document.";
-
-    // 🤖 Optional AI enhancement (safe)
+    // 🤖 Augmented generation step: send the retrieved context to the model
+    // to produce the final answer, grounded in the document instead of the
+    // model's general knowledge alone.
+    let answer = context;
     try {
       answer = await summarizeText(
-        `Question: ${question}\nContext: ${answer}`
+        `Question: ${question}\nContext: ${context}\n\nAnswer the question using only the context above. If the context doesn't contain the answer, say so.`
       );
     } catch (err) {
       console.log("AI skipped:", err.message);
@@ -73,4 +79,3 @@ exports.getChatHistory = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
-
