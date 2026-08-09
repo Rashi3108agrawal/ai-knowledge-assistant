@@ -33,6 +33,13 @@ export const searchDocuments = (query, token, page = 1, limit = 5) =>
     headers: { Authorization: `Bearer ${token}` },
   });
 
+export const semanticSearchDocuments = (query, token) =>
+  api.post(
+    "/document/semantic-search",
+    { query },
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+
 // Chat
 export const askQuestion = (data, token) =>
   api.post("/chat/ask", data, { headers: { Authorization: `Bearer ${token}` } });

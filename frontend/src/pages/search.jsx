@@ -1,9 +1,11 @@
 import React, { useState } from "react";
-import { searchDocuments } from "../api/api";
+import { searchDocuments, semanticSearchDocuments } from "../api/api";
 
 export default function SearchPage({ token }) {
   const [query, setQuery] = useState("");
+  const [mode, setMode] = useState("keyword"); // "keyword" or "semantic"
   const [results, setResults] = useState([]);
+  const [semanticResults, setSemanticResults] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [pagination, setPagination] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -12,13 +14,22 @@ export default function SearchPage({ token }) {
     if (!query) return;
     setLoading(true);
     try {
-      const res = await searchDocuments(query, token, page, 5);
-      setResults(res.data.results);
-      setPagination(res.data.pagination);
-      setCurrentPage(page);
+      if (mode === "semantic") {
+        const res = await semanticSearchDocuments(query, token);
+        setSemanticResults(res.data);
+        setResults([]);
+        setPagination(null);
+      } else {
+        const res = await searchDocuments(query, token, page, 5);
+        setResults(res.data.results);
+        setPagination(res.data.pagination);
+        setCurrentPage(page);
+        setSemanticResults([]);
+      }
     } catch (err) {
       console.error("Search failed:", err);
       setResults([]);
+      setSemanticResults([]);
       setPagination(null);
     } finally {
       setLoading(false);
@@ -43,11 +54,39 @@ export default function SearchPage({ token }) {
   return (
     <div className="card">
       <h2>🔍 Search Documents</h2>
+
+      <div style={{ display: "flex", gap: "10px", marginBottom: "15px" }}>
+        <button
+          onClick={() => setMode("keyword")}
+          style={{
+            background: mode === "keyword" ? "#667eea" : "white",
+            color: mode === "keyword" ? "white" : "#333",
+            border: "1px solid #ddd",
+          }}
+        >
+          Keyword Search
+        </button>
+        <button
+          onClick={() => setMode("semantic")}
+          style={{
+            background: mode === "semantic" ? "#667eea" : "white",
+            color: mode === "semantic" ? "white" : "#333",
+            border: "1px solid #ddd",
+          }}
+        >
+          🧠 Semantic Search
+        </button>
+      </div>
+
       <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Enter search keywords..."
+          placeholder={
+            mode === "semantic"
+              ? "Describe what you're looking for — exact words don't need to match..."
+              : "Enter search keywords..."
+          }
           onKeyPress={(e) => {
             if (e.key === "Enter") handleSearch(1);
           }}
@@ -58,7 +97,28 @@ export default function SearchPage({ token }) {
         </button>
       </div>
 
-      {results.length > 0 && (
+      {mode === "semantic" && semanticResults.length > 0 && (
+        <div className="search-results">
+          <h3 style={{ color: "#667eea", marginBottom: "15px" }}>
+            Top {semanticResults.length} semantically related result{semanticResults.length !== 1 ? "s" : ""}
+          </h3>
+          <ul className="document-list">
+            {semanticResults.map((r, idx) => (
+              <li key={idx} className="result-item">
+                <div style={{ flex: 1 }}>
+                  <div className="result-item-title">📄 {r.name}</div>
+                  <div className="result-item-snippet">{r.matchedText}</div>
+                  <div style={{ fontSize: "0.85rem", color: "#999", marginTop: "8px" }}>
+                    🎯 similarity: {r.score.toFixed(3)}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {mode === "keyword" && results.length > 0 && (
         <div className="search-results">
           <h3 style={{ color: "#667eea", marginBottom: "15px" }}>
             Found {pagination?.total} result{pagination?.total !== 1 ? "s" : ""} (Page {pagination?.page} of {pagination?.pages})
